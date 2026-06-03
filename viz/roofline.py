@@ -31,9 +31,9 @@ FLOPs_per_LU = 185 # how many floating point operations are performed for each l
 # (label, memory bandwidth (Bytes/LU), performance [MLUP/s])
 # these are values for a 800x400 grid over 60000 steps
 kernels = [
-    ("two-step",  360, 20.7587), 
-    ("one-step AoS",  216, 27.929),
-    ("one-step SoA",  216, 23.0893)
+    ("two-step",  360, 21.46), 
+    ("one-step AoS",  216, 27.07),
+    ("one-step SoA",  216, 22.70)
 ]
 
 # ── Roofline curve ────────────────────────────────────────────────────────────
