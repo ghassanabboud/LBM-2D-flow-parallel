@@ -85,6 +85,7 @@ public:
 
   /// Debug: print all populations at three cells on bottom row (rank 0 only).
   void print_bottom_row_populations() const;
+  void print_ghost_row_populations() const;
 
 private:
   // Local flat index: local_y in [0, local_ny+1], x in [0, nx).

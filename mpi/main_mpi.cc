@@ -140,7 +140,9 @@ main(int argc, char ** argv)
 
     // Debug: print bottom row populations every 10 steps.
     if (step % 10 == 0) {
+      if (rank == 0) std::cout << "\nStep " << step << ":\n";
       solver.print_bottom_row_populations();
+      solver.print_ghost_row_populations();
     }
 
     // Probe: owning rank computes local values; MPI_Reduce sums to rank 0.

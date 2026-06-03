@@ -408,6 +408,28 @@ LBM::print_bottom_row_populations() const
     std::printf("x=%zu: ", x);
     for (int i = 0; i < Q; ++i) {
       std::printf("%.6f ", f_[std::size_t(i) * N_local_ + lidx(x, 1)]);
+      std::printf("\n");
+    }
+  }
+  std::printf("\n");
+  std::fflush(stdout);
+}
+
+void
+LBM::print_ghost_row_populations() const
+{
+  if (rank_ != 0) return;
+
+  const std::size_t x1 = 0;
+  const std::size_t x2 = nx_ / 2;
+  const std::size_t x3 = nx_ - 1;
+
+  std::printf("ghost row (local_y=0): ");
+  for (const auto x : {x1, x2, x3}) {
+    std::printf("x=%zu: ", x);
+    for (int i = 0; i < Q; ++i) {
+      std::printf("%.6f ", f_[std::size_t(i) * N_local_ + lidx(x, 0)]);
+      std::printf("\n");
     }
   }
   std::printf("\n");
