@@ -64,9 +64,9 @@ LBM::LBM(std::size_t nx, std::size_t ny,
   // Last rank owns global y = ny-1 (top wall) at local_y = local_ny_.
   for (std::size_t x = 0; x < nx_; ++x) {
     if (y_start_ == 0)
-      solid_[lidx(x, 1)] = 1;                       // bottom wall
+      solid_[lidx(x, 1)] = 1;                       // bottom wall marked at local_y = 1 because local_y = 0 is the ghost row representing the outside
     if (y_start_ + local_ny_ == ny_)
-      solid_[lidx(x, local_ny_)] = 1;               // top wall
+      solid_[lidx(x, local_ny_)] = 1;               // top wall marked at local_y = local_ny_ because local_y = local_ny_ + 1 is the ghost row representing the outside
   }
 
   mark_obstacle(cyl_x, cyl_y, cyl_r);
@@ -146,8 +146,8 @@ LBM::exchange_halos()
 
   // Pack bottom data row (local_y = 1) to send to rank_below.
   for (int i = 0; i < Q; ++i)
-    std::memcpy(&send_down[std::size_t(i) * row_len],
-                &f_[std::size_t(i) * N_local_ + 1 * nx_],
+    std::memcpy(&send_down[std::size_t(i) * row_len], // this respects the SoA layout
+                &f_[std::size_t(i) * N_local_ + 1 * nx_], // i * N_local_ respects the SoA layout, + 1 * nx_ to get to local_y = 1
                 row_len * sizeof(double));
 
   // Pack top data row (local_y = local_ny_) to send to rank_above.
@@ -171,7 +171,7 @@ LBM::exchange_halos()
   // Unpack into ghost rows.
   for (int i = 0; i < Q; ++i) {
     // Bottom ghost row (local_y = 0): data sent upward from rank_below.
-    std::memcpy(&f_[std::size_t(i) * N_local_ + 0 * nx_],
+    std::memcpy(&f_[std::size_t(i) * N_local_ + 0 * nx_], // i * N_local_ respects the SoA layout, + 0 * nx_ to get to local_y = 0 (the bottom ghost row)
                 &recv_from_below[std::size_t(i) * row_len],
                 row_len * sizeof(double));
     // Top ghost row (local_y = local_ny_ + 1): data sent downward from rank_above.
