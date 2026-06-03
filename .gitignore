@@ -1,3 +1,10 @@
 out/
 jobs/
 *.out
+*.o
+lbm_serial
+lbm_serial_fused_AoS
+lbm_serial_fused_SoA
+lbm_mpi
+stream
+dgemm
