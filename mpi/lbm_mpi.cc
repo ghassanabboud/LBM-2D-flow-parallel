@@ -83,8 +83,11 @@ LBM::mark_obstacle(double c_x, double c_y, double r)
 {
   const double r2 = r * r;
   bool has_local = false;
-  for (std::size_t local_y = 1; local_y <= local_ny_; ++local_y) {
-    const double gy = double(y_start_ + local_y - 1);
+  // includes ghost rows (local_y = 0 and local_ny_+1) so bounce-back works
+  // correctly across rank boundaries — ghost global-y may be out of domain but
+  // the cylinder equation is still valid there.
+  for (std::size_t local_y = 0; local_y <= local_ny_ + 1; ++local_y) {
+    const double gy = double(long(y_start_) + long(local_y) - 1);
     for (std::size_t x = 0; x < nx_; ++x) {
       const double dx = double(x) - c_x;
       const double dy = gy - c_y;
