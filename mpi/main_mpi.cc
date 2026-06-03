@@ -138,6 +138,11 @@ main(int argc, char ** argv)
   for (std::size_t step = 1; step <= steps; ++step) {
     solver.step();
 
+    // Debug: print bottom row populations every 10 steps.
+    if (step % 10 == 0) {
+      solver.print_bottom_row_populations();
+    }
+
     // Probe: owning rank computes local values; MPI_Reduce sums to rank 0.
     double loc_ux = 0.0, loc_uy = 0.0;
     if (rank == probe_rank) {

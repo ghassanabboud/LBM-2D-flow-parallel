@@ -393,3 +393,23 @@ LBM::gather_solid(std::vector<std::uint8_t>& solid_out) const
              rank_ == 0 ? solid_out.data() : nullptr, int(slab), MPI_UNSIGNED_CHAR,
              0, comm_);
 }
+
+void
+LBM::print_bottom_row_populations() const
+{
+  if (rank_ != 0) return;
+
+  const std::size_t x1 = 0;
+  const std::size_t x2 = nx_ / 2;
+  const std::size_t x3 = nx_ - 1;
+
+  std::printf("Bottom row (local_y=1): ");
+  for (const auto x : {x1, x2, x3}) {
+    std::printf("x=%zu: ", x);
+    for (int i = 0; i < Q; ++i) {
+      std::printf("%.6f ", f_[std::size_t(i) * N_local_ + lidx(x, 1)]);
+    }
+  }
+  std::printf("\n");
+  std::fflush(stdout);
+}

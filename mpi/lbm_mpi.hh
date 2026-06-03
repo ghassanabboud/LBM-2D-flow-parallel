@@ -83,6 +83,9 @@ public:
   /// Gather solid mask to rank 0 (full domain, global row-major order).
   void gather_solid(std::vector<std::uint8_t>& solid_out) const;
 
+  /// Debug: print all populations at three cells on bottom row (rank 0 only).
+  void print_bottom_row_populations() const;
+
 private:
   // Local flat index: local_y in [0, local_ny+1], x in [0, nx).
   std::size_t lidx (std::size_t x, std::size_t local_y) const { return local_y * nx_ + x; }
