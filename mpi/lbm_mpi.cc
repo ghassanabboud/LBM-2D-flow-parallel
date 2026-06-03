@@ -4,6 +4,8 @@
 #include <cassert>
 #include <cstring>
 #include <stdexcept>
+#include <stdio.h>
+#include <iostream>
 
 // D2Q9 lattice constants.
 //   0: rest   1: E    2: N    3: W    4: S
@@ -39,12 +41,17 @@ LBM::LBM(std::size_t nx, std::size_t ny,
 
   local_ny_ = ny / std::size_t(nprocs_);
   y_start_  = std::size_t(rank_) * local_ny_;
-  N_local_  = nx_ * (local_ny_ + 2);
+  N_local_  = nx_ * (local_ny_ + 2); // 2 additional rows for ghost data
 
   rank_below_ = (rank_ > 0)           ? rank_ - 1 : MPI_PROC_NULL;
   rank_above_ = (rank_ < nprocs_ - 1) ? rank_ + 1 : MPI_PROC_NULL;
 
-  // Allocate local arrays including ghost rows. Vectors are zero-initialised.
+  std::cout << "Rank " << rank_ << " / " << nprocs_
+            << " : local_ny = " << local_ny_
+            << ", y range = [" << y_start_ << ", " << (y_start_ + local_ny_ - 1) << "]\n"
+            << ", rank_below = " << rank_below_ << ", rank_above = " << rank_above_ << "\n";
+
+  // allocate and zero-initialise vectors to respect first-touch principle 
   f_    .assign(Q * N_local_, 0.0);
   ftmp_ .assign(Q * N_local_, 0.0);
   solid_.assign(N_local_, 0);
@@ -75,13 +82,20 @@ void
 LBM::mark_obstacle(double c_x, double c_y, double r)
 {
   const double r2 = r * r;
+  bool has_local = false;
   for (std::size_t local_y = 1; local_y <= local_ny_; ++local_y) {
     const double gy = double(y_start_ + local_y - 1);
     for (std::size_t x = 0; x < nx_; ++x) {
       const double dx = double(x) - c_x;
       const double dy = gy - c_y;
-      if (dx * dx + dy * dy <= r2) solid_[lidx(x, local_y)] = 1;
+      if (dx * dx + dy * dy <= r2){
+        solid_[lidx(x, local_y)] = 1;
+        has_local = true;
     }
+  }
+}
+  if (has_local) {
+    std::cout << "Rank " << rank_ << " has part of the cylinder in its local domain.\n";
   }
 }
 
@@ -167,22 +181,30 @@ LBM::exchange_halos()
   }
 }
 
-// ---------------------------------------------------------------------------
-// Fused pull-stream + BGK collision.
-//
-// The y out-of-bounds check from the serial version is gone: ghost rows cover
-// local_y - 1 = 0 and local_y + 1 = local_ny_ + 1, both valid array indices.
-// Only the x direction still needs a bounds check.
-// ---------------------------------------------------------------------------
+
 void
 LBM::collide_stream()
 {
+  // Fused pull-stream + BGK collision in a single pass over the grid.
+  // The SoA layout means all cells for a given direction are contiguous in
+  // memory, so each streaming gather reads stride-1 within its direction plane.
   const double inv_tau = 1.0 / tau_;
 
   for (std::size_t local_y = 1; local_y <= local_ny_; ++local_y) {
     for (std::size_t x = 0; x < nx_; ++x) {
       const std::size_t k = lidx(x, local_y);
 
+      // this implementation does streaming and then collision in a single pass
+      // first, we gather for cell k, the neighbouring position streams that are coming our way. There are three cases then:
+      // - if the neighbour is fluid and inside the domain, we take the value from that cell and population
+      // - if the neighbour is solid and inside the domain, we take the value from the opposite population of that cell (bounce-back)
+      // - if the neighbour is outside the domain, we keep the current value in f_local, which will be overwritten if on inlet/outlet and is never used otherwise (e.g. on the top/bottom walls)
+      // MPI SPECIFIC NOTE: we only do checks on x out-of-bounds now because ghost rows on the first and last rank
+      // take care of y out-of-bounds. These fictitious rows are 0 on initialization, never get populated through exchanges and thus have zero effect.
+
+
+      // once we have gathered all of this into f_local, we have all the data we need to do the collision step for cell k before writing the post-collision values to ftmp_
+      // we still need to have two arrays because changing f_ directly would change the values used for the next cells within one step
       double f_local[Q];
 
       for (int i = 0; i < Q; ++i) {
@@ -249,10 +271,6 @@ LBM::apply_outlet()
       f_[std::size_t(i) * N_local_ + k] = f_[std::size_t(i) * N_local_ + ks];
   }
 }
-
-// ---------------------------------------------------------------------------
-// Macroscopic accessors — local_y in [1, local_ny_].
-// ---------------------------------------------------------------------------
 
 double
 LBM::rho(std::size_t x, std::size_t local_y) const

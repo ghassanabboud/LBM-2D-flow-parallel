@@ -60,6 +60,9 @@ main(int argc, char ** argv)
   MPI_Comm_rank(MPI_COMM_WORLD, &rank);
   MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
 
+  std::cout << "Hello from rank " << rank << " / " << nprocs << "\n" << std::flush;
+  MPI_Barrier(MPI_COMM_WORLD);
+
   const Args kv = parse_args(argc, argv);
 
   const std::size_t nx    = get<std::size_t>(kv, "nx",    800);
