@@ -1,0 +1,242 @@
+#include "lbm_fused_AoS.hh"
+
+#include <algorithm>
+
+// D2Q9 lattice constants. Indexing convention used throughout:
+//   0: rest         5: NE
+//   1: E            6: NW
+//   2: N            7: SW
+//   3: W            8: SE
+//   4: S
+const int LBM::cx[9] = { 0,  1,  0, -1,  0,  1, -1, -1,  1};
+const int LBM::cy[9] = { 0,  0,  1,  0, -1,  1,  1, -1, -1};
+
+const double LBM::w[9] = {
+  4.0 / 9.0,
+  1.0 / 9.0,  1.0 / 9.0,  1.0 / 9.0,  1.0 / 9.0,
+  1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0, 1.0 / 36.0
+};
+
+const int LBM::opp[9] = {0, 3, 4, 1, 2, 7, 8, 5, 6};
+
+LBM::LBM(std::size_t nx, std::size_t ny,
+         double u_in, double Re,
+         double cyl_x, double cyl_y, double cyl_r)
+  : nx_(nx), ny_(ny), u_in_(u_in), tau_(0.0), // this is the constructor, initializing attributes ending in "_"
+    f_   (Q * nx * ny, 0.0), //this is equivalent to a call to the vector constructor std::vector<double>(count, value))
+    ftmp_(Q * nx * ny, 0.0),
+    solid_(nx * ny, 0)
+{
+  // ν = c_s^2 (τ - 1/2) with c_s^2 = 1/3, and Re = u_in * D / ν.
+  // the Reynolds number to be simulated is given as argument because it is a physically meaningful quantity
+  // for the BGK-LBM scheme, the relaxation time tau for the updates is calculated from the viscosity nu, which is in turn calculated from the Reynolds number
+  // inlet velocity and cylinder diameter. However, tau must be > 0.5 for stability, which limits the minimum viscosity and maximum Reynolds number that can be simulated at a given resolution and inlet velocity.
+  const double nu = u_in_ * (2.0 * cyl_r) / Re;
+  tau_ = 3.0 * nu + 0.5;
+
+  // No-slip top and bottom walls.
+  for (std::size_t x = 0; x < nx_; ++x) {
+    solid_[idx(x, 0)]        = 1;
+    solid_[idx(x, ny_ - 1)]  = 1;
+  }
+  mark_obstacle(cyl_x, cyl_y, cyl_r);
+}
+
+void
+LBM::add_second_cylinder(double cyl2_x, double cyl2_y, double cyl2_r)
+{
+  if (cyl2_r > 0.0) mark_obstacle(cyl2_x, cyl2_y, cyl2_r);
+}
+
+void
+LBM::mark_obstacle(double c_x, double c_y, double r)
+{
+  //this function iterates over all the grid points and marks as solid those that are within the radius of the cylinder centered at (c_x, c_y)
+  const double r2 = r * r;
+  for (std::size_t y = 0; y < ny_; ++y) {
+    for (std::size_t x = 0; x < nx_; ++x) {
+      const double dx = double(x) - c_x;
+      const double dy = double(y) - c_y;
+      if (dx * dx + dy * dy <= r2) solid_[idx(x, y)] = 1;
+    }
+  }
+}
+
+void
+LBM::initialize()
+{
+  for (std::size_t y = 0; y < ny_; ++y) {
+    for (std::size_t x = 0; x < nx_; ++x) {
+      // we initialize the entire domain to a horizontal velocity matching the inlet
+      // this allows to reach the vortex regime faster.
+      const double rho = 1.0;
+      const double ux  = solid_[idx(x, y)] ? 0.0 : u_in_; // No initial flow in solid cells.
+      const double uy  = 0.0;
+      const double u2  = ux * ux + uy * uy;
+      const std::size_t k = idx(x, y);
+      for (int i = 0; i < Q; ++i) {
+        const double cu  = cx[i] * ux + cy[i] * uy;
+        const double feq = w[i] * rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2);
+        // AoS layout: all Q populations for cell k are contiguous at f_[k*Q + 0..8]
+        f_[k * Q + i] = feq;
+      }
+    }
+  }
+}
+
+void
+LBM::step()
+{
+  collide_stream();
+  apply_inlet();
+  apply_outlet();
+}
+
+void
+LBM::collide_stream()
+{
+  // Fused pull-stream + BGK collision in a single pass over the grid.
+  // The AoS layout means all Q populations for each cell are contiguous in
+  // memory, so the moment sums and the final write are both stride-1.
+  const double inv_tau = 1.0 / tau_;
+
+  for (std::size_t y = 0; y < ny_; ++y) {
+    for (std::size_t x = 0; x < nx_; ++x) {
+      const std::size_t k = idx(x, y);
+
+      // this implementation does streaming and then collision in a single pass
+      // first, we gather for cell k, the neighbouring position streams that are coming our way. There are three cases then:
+      // - if the neighbour is fluid and inside the domain, we take the value from that cell and population
+      // - if the neighbour is solid and inside the domain, we take the value from the opposite population of that cell (bounce-back)
+      // - if the neighbour is outside the domain, we keep the current value in f_local, which will be overwritten if on inlet/outlet and is never used otherwise (e.g. on the top/bottom walls)
+      
+      // once we have gathered all of this into f_local, we have all the data we need to do the collision step for cell k before writing the post-collision values to ftmp_[k*Q + 0..8]
+      // we still need to have two arrays because changing f_ directly would change the values used for the next cells within one step
+
+      double f_local[Q];
+
+      for (int i = 0; i < Q; ++i) {
+        // this long conversion is so that if x = 0 and cx[i] = 1, sx becomes -1,
+        // not a large positive number (wrapping around due to unsigned underflow)
+        const long sx = long(x) - cx[i];
+        const long sy = long(y) - cy[i];
+        if (sx >= 0 && sx < long(nx_) && sy >= 0 && sy < long(ny_)) { //checking we're not referencing a cell outside the domain
+          const std::size_t sk = idx(std::size_t(sx), std::size_t(sy));
+          // idx converts 2D coordinates to 1D cell index; *Q+i selects the population (AoS)
+          // if the neighbour cell is solid, we take the opposite population from that cell (bounce-back)
+          f_local[i] = solid_[sk] ? f_[sk * Q + opp[i]] : f_[sk * Q + i]; //neighbour in-domain, solid or fluid
+        } else { // neighbour out of bounds
+          f_local[i] = f_[k * Q + i]; 
+        }
+      }
+
+      // Collision over the new populations we just pulled
+      double rho = 0.0, mx = 0.0, my = 0.0;
+      for (int i = 0; i < Q; ++i) {
+        rho += f_local[i];           //zeroth moment of distribution, aka density
+        mx  += cx[i] * f_local[i];  //momentum in x direction, first moment of distribution
+        my  += cy[i] * f_local[i];  //momentum in y direction, first moment of distribution
+      }
+
+      // macroscopic velocity components obtained by dividing momentum by density
+      const double ux = (rho > 0.0) ? mx / rho : 0.0;
+      const double uy = (rho > 0.0) ? my / rho : 0.0;
+      const double u2 = ux * ux + uy * uy;
+
+      // Write post-collision populations contiguously to ftmp_[k*Q + 0..8] —
+      // stride-1 write of 9 doubles (one cache line), optimal write bandwidth.
+      for (int i = 0; i < Q; ++i) {
+        const double cu  = cx[i] * ux + cy[i] * uy;
+        const double feq = w[i] * rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2);
+        ftmp_[k * Q + i] = f_local[i] - inv_tau * (f_local[i] - feq);
+      }
+    }
+  }
+
+  f_.swap(ftmp_); //swap pointers to reuse ftmp_ as the new distribution array without copying data
+}
+
+void
+LBM::apply_inlet()
+{
+  // Reset the inlet column to the equilibrium distribution corresponding
+  // to a prescribed uniform velocity (u_in, 0) and unit density. Simple,
+  // stable, and accurate enough for moderate Reynolds numbers.
+  const std::size_t x = 0;
+  for (std::size_t y = 0; y < ny_; ++y) {
+    if (solid_[idx(x, y)]) continue;
+    const double rho = 1.0;
+    const double ux  = u_in_;
+    const double uy  = 0.0;
+    const double u2  = ux * ux + uy * uy;
+    const std::size_t k = idx(x, y);
+    for (int i = 0; i < Q; ++i) {
+      const double cu  = cx[i] * ux + cy[i] * uy;
+      f_[k * Q + i] = w[i] * rho * (1.0 + 3.0 * cu + 4.5 * cu * cu - 1.5 * u2);
+    }
+  }
+}
+
+void
+LBM::apply_outlet()
+{
+  // Zero-gradient outlet: copy the second-to-last column into the last.
+  if (nx_ < 2) return;
+  const std::size_t x  = nx_ - 1;
+  const std::size_t xs = nx_ - 2;
+  for (std::size_t y = 0; y < ny_; ++y) {
+    const std::size_t k  = idx(x,  y);
+    const std::size_t ks = idx(xs, y);
+    for (int i = 0; i < Q; ++i) {
+      f_[k * Q + i] = f_[ks * Q + i];
+    }
+  }
+}
+
+double
+LBM::rho(std::size_t x, std::size_t y) const
+{
+  const std::size_t k = idx(x, y);
+  double r = 0.0;
+  for (int i = 0; i < Q; ++i) r += f_[k * Q + i];
+  return r;
+}
+
+double
+LBM::ux(std::size_t x, std::size_t y) const
+{
+  const std::size_t k = idx(x, y);
+  double r = 0.0, m = 0.0;
+  for (int i = 0; i < Q; ++i) {
+    const double fi = f_[k * Q + i];
+    r += fi;
+    m += cx[i] * fi;
+  }
+  return (r > 0.0) ? m / r : 0.0;
+}
+
+double
+LBM::uy(std::size_t x, std::size_t y) const
+{
+  const std::size_t k = idx(x, y);
+  double r = 0.0, m = 0.0;
+  for (int i = 0; i < Q; ++i) {
+    const double fi = f_[k * Q + i];
+    r += fi;
+    m += cy[i] * fi;
+  }
+  return (r > 0.0) ? m / r : 0.0;
+}
+
+double
+LBM::vorticity(std::size_t x, std::size_t y) const
+{
+  if (x == 0 || x == nx_ - 1 || y == 0 || y == ny_ - 1) return 0.0;
+  return 0.5 * ((uy(x + 1, y) - uy(x - 1, y)) - (ux(x, y + 1) - ux(x, y - 1)));
+}
+
+bool
+LBM::is_solid(std::size_t x, std::size_t y) const
+{
+  return solid_[idx(x, y)] != 0;
+}
