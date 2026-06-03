@@ -1,6 +1,6 @@
 # this ?= means "assign if not defined", aka if a conda env is activated CXX will 
 # already be set and this command does nothing
-CXX      ?= mpicxx
+CXX      = mpicxx
 
 
 # We use the CXX variable for both compiling and linking, which is common practice
