@@ -1,7 +1,8 @@
 # Experiment 01: Replicate SoA and AoS runtimes for serial one-step implementations
 #### **Code version:** initial commit again (f52d02dd5ed596f6c8480d1b9391adb9a285f03d)
 ## Results and Next Steps
-TO-DO: record here the partial or final conclusions and results of the technical experiment. 
+
+The AoS version is consistently faster than the SoA version with performance values of 23.3, 27.8, 27.8 MLUPS on the 800x400 grid. The bigger problem is that the speed-up from the original two-step algorithm to the fused one-step algorithm is not consistent. Two-step gives values 19.65, 22.26, 22.24 while SoA one-step gives 20.39, 22.89, 23.05. This is close to the values I put in the report but this variation is problematic for reproducibility, especially since I want to use SoA for parallelization. I will do a final sweep on the 800x400 grid with more replicates to get better statistics and report them with SD in the report. 
 
 ## Objective 
 Independent runs have shown variations in the runtime and MLUPS performance of the serial codes. The report's `Single-CPU performance` section compares runtimes for SoA and AoS and tries to interpret them so the results should be reproducible. The objective of this experiment is to get values of performance for the three serial implementations (SoA, AoS and original) that is consistent across replicates for reproducibility in reporting.
@@ -9,7 +10,7 @@ Independent runs have shown variations in the runtime and MLUPS performance of t
 If the values are too inconsistent across replicates, a larger number of relicates will allow to report performance on one grid with better statistics.
 
 ## Status
-**Running**
+**Completed**
 - **Slurm job name and ID**:
     - SoA replicates: `rep_SoA`, job ID 54908551
     - AoS replicates: `rep_AoS`, job ID 54908556
@@ -19,7 +20,7 @@ If the values are too inconsistent across replicates, a larger number of relicat
 ## Expected outcomes
 
 - _Deliverables_: results.csv files for the three versions
-- _output directory_: a directory containing the output of the Slurm job, including logs and performance metrics.
+- _output directory_:  `./out/SoA_replicates/`, `./out/AoS_replicates/`, `./out/twostep_serial_replicates/`
 - _decisions to take_: decide whether to keep results and change values in the report or to run more replicates on the 800x400 grid overnight.
 
 

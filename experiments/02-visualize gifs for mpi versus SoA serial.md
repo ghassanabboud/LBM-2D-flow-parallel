@@ -1,4 +1,4 @@
-# Experiment N: Visualize GIFs for MPI version
+# Experiment 02: Visualize GIFs for MPI version
  #### **Code version:** mpi debug prints (d800bb03106e06a5677a0e2917598f24b8bb25bf)
 
 ## Results and Next Steps
