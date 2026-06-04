@@ -32,6 +32,7 @@ public:
   static const int    cy[Q];
   static const double w[Q];
   static const int    opp[Q];
+  static const char* const dir_name[Q];  ///< Human-readable direction labels (C,E,N,W,S,NE,NW,SW,SE).
 
   /**
    * @param nx, ny   Global grid dimensions.
@@ -83,9 +84,15 @@ public:
   /// Gather solid mask to rank 0 (full domain, global row-major order).
   void gather_solid(std::vector<std::uint8_t>& solid_out) const;
 
-  /// Debug: print all populations at three cells on bottom row (rank 0 only).
-  void print_bottom_row_populations() const;
-  void print_ghost_row_populations() const;
+  /// Debug: print solid mask at global boundary rows (rank-aware).
+  void print_solid_boundary_rows() const;
+  /// Debug: print solid mask stored in each rank's ghost rows.
+  void print_solid_boundary_rows_ghost() const;
+  /// Debug: print all 9 populations at a global (x, y_global) point.
+  void print_point_populations(std::size_t x, std::size_t y_global) const;
+  /// Debug: print post-stream pre-collision populations at a global point.
+  /// Must be called after exchange_halos() so ghost rows are fresh.
+  void print_post_stream_pre_collision(std::size_t x, std::size_t y_global) const;
 
 private:
   // Local flat index: local_y in [0, local_ny+1], x in [0, nx).
@@ -99,6 +106,7 @@ private:
   void collide_stream ();
   void apply_inlet    ();
   void apply_outlet   ();
+  void gather_streamed(std::size_t x, std::size_t local_y, double f_local[Q]) const;
 
   std::size_t nx_, ny_;      ///< Global dimensions.
   std::size_t local_ny_;     ///< Data rows owned by this rank.

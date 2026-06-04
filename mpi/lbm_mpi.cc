@@ -21,6 +21,8 @@ const double LBM::w[9] = {
 
 const int LBM::opp[9] = {0, 3, 4, 1, 2, 7, 8, 5, 6};
 
+const char* const LBM::dir_name[9] = {"C","E","N","W","S","NE","NW","SW","SE"};
+
 // ---------------------------------------------------------------------------
 
 LBM::LBM(std::size_t nx, std::size_t ny,
@@ -124,6 +126,15 @@ void
 LBM::step()
 {
   exchange_halos();
+  if (std::getenv("DEBUG_PRINTS")) {
+    const std::size_t x_mid = nx_ / 2;
+    for (int r = 0; r < nprocs_; ++r) {
+      if (rank_ == r)
+        for (std::size_t gy : {std::size_t(0), std::size_t(1), ny_ - 2, ny_ - 1})
+          print_post_stream_pre_collision(x_mid, gy);
+      MPI_Barrier(comm_);
+    }
+  }
   collide_stream();
   apply_inlet();
   apply_outlet();
@@ -397,44 +408,104 @@ LBM::gather_solid(std::vector<std::uint8_t>& solid_out) const
              0, comm_);
 }
 
+// ---------------------------------------------------------------------------
+// Debug print helpers (rank-aware, global y-indexing)
+// ---------------------------------------------------------------------------
+
+// Pull-streaming for one cell, used only by print_post_stream_pre_collision.
+// Identical logic to collide_stream's inner loop but isolated for read-only
+// inspection before the actual step. Ghost rows must be fresh (after exchange_halos).
 void
-LBM::print_bottom_row_populations() const
+LBM::gather_streamed(std::size_t x, std::size_t local_y, double f_local[Q]) const
 {
-  if (rank_ != 0) return;
-
-  const std::size_t x1 = 0;
-  const std::size_t x2 = nx_ / 2;
-  const std::size_t x3 = nx_ - 1;
-
-  std::printf("Bottom row (local_y=1): ");
-  for (const auto x : {x1, x2, x3}) {
-    std::printf("x=%zu: ", x);
-    for (int i = 0; i < Q; ++i) {
-      std::printf("%.6f ", f_[std::size_t(i) * N_local_ + lidx(x, 1)]);
-      std::printf("\n");
+  const std::size_t k = lidx(x, local_y);
+  for (int i = 0; i < Q; ++i) {
+    const long sx = long(x)       - cx[i];
+    const long sy = long(local_y) - cy[i];  // always in [0, local_ny_+1] for data rows
+    if (sx >= 0 && sx < long(nx_)) {
+      const std::size_t sk = std::size_t(sy) * nx_ + std::size_t(sx);
+      f_local[i] = solid_[sk] ? f_[std::size_t(opp[i]) * N_local_ + sk]
+                               : f_[std::size_t(i)      * N_local_ + sk];
+    } else {
+      f_local[i] = f_[std::size_t(i) * N_local_ + k];
     }
   }
+}
+
+void
+LBM::print_solid_boundary_rows() const
+{
+  // Bottom wall lives at local_y=1 on rank 0 (global y=0).
+  if (y_start_ == 0) {
+    std::printf("[MPI rank %d] solid bottom wall (global y=0, local_y=1):", rank_);
+    for (std::size_t x = 0; x < nx_; ++x)
+      std::printf(" x=%zu:%d", x, solid_[lidx(x, 1)]);
+    std::printf("\n");
+    std::printf("[MPI rank %d] first fluid row  (global y=1, local_y=2):", rank_);
+    for (std::size_t x = 0; x < nx_; ++x)
+      std::printf(" x=%zu:%d", x, solid_[lidx(x, 2)]);
+    std::printf("\n");
+    std::fflush(stdout);
+  }
+  // Top wall lives at local_y=local_ny_ on the last rank (global y=ny-1).
+  if (y_start_ + local_ny_ == ny_) {
+    std::printf("[MPI rank %d] last fluid row   (global y=%zu, local_y=%zu):",
+                rank_, ny_ - 2, local_ny_ - 1);
+    for (std::size_t x = 0; x < nx_; ++x)
+      std::printf(" x=%zu:%d", x, solid_[lidx(x, local_ny_ - 1)]);
+    std::printf("\n");
+    std::printf("[MPI rank %d] solid top wall   (global y=%zu, local_y=%zu):",
+                rank_, ny_ - 1, local_ny_);
+    for (std::size_t x = 0; x < nx_; ++x)
+      std::printf(" x=%zu:%d", x, solid_[lidx(x, local_ny_)]);
+    std::printf("\n");
+    std::fflush(stdout);
+  }
+}
+
+void
+LBM::print_solid_boundary_rows_ghost() const
+{
+  // Ghost rows are initialised by each rank independently (not exchanged).
+  // global y of bottom ghost = y_start_ - 1 (may be negative for rank 0).
+  std::printf("[MPI rank %d] bottom ghost solid (local_y=0, global y=%ld):",
+              rank_, long(y_start_) - 1);
+  for (std::size_t x = 0; x < nx_; ++x)
+    std::printf(" x=%zu:%d", x, solid_[lidx(x, 0)]);
+  std::printf("\n");
+
+  std::printf("[MPI rank %d] top ghost solid    (local_y=%zu, global y=%zu):",
+              rank_, local_ny_ + 1, y_start_ + local_ny_);
+  for (std::size_t x = 0; x < nx_; ++x)
+    std::printf(" x=%zu:%d", x, solid_[lidx(x, local_ny_ + 1)]);
   std::printf("\n");
   std::fflush(stdout);
 }
 
 void
-LBM::print_ghost_row_populations() const
+LBM::print_point_populations(std::size_t x, std::size_t y_global) const
 {
-  if (rank_ != 0) return;
+  if (y_global < y_start_ || y_global >= y_start_ + local_ny_) return;
+  const std::size_t local_y = y_global - y_start_ + 1;
+  std::printf("[MPI rank %d] f at (x=%zu, global_y=%zu, local_y=%zu):",
+              rank_, x, y_global, local_y);
+  for (int i = 0; i < Q; ++i)
+    std::printf(" f%s=%.6f", dir_name[i], f_[fidx(i, x, local_y)]);
+  std::printf("\n");
+  std::fflush(stdout);
+}
 
-  const std::size_t x1 = 0;
-  const std::size_t x2 = nx_ / 2;
-  const std::size_t x3 = nx_ - 1;
-
-  std::printf("ghost row (local_y=0): ");
-  for (const auto x : {x1, x2, x3}) {
-    std::printf("x=%zu: ", x);
-    for (int i = 0; i < Q; ++i) {
-      std::printf("%.6f ", f_[std::size_t(i) * N_local_ + lidx(x, 0)]);
-      std::printf("\n");
-    }
-  }
+void
+LBM::print_post_stream_pre_collision(std::size_t x, std::size_t y_global) const
+{
+  if (y_global < y_start_ || y_global >= y_start_ + local_ny_) return;
+  const std::size_t local_y = y_global - y_start_ + 1;
+  double f_local[Q];
+  gather_streamed(x, local_y, f_local);
+  std::printf("[MPI rank %d] f_streamed at (x=%zu, global_y=%zu, local_y=%zu):",
+              rank_, x, y_global, local_y);
+  for (int i = 0; i < Q; ++i)
+    std::printf(" f%s=%.6f", dir_name[i], f_local[i]);
   std::printf("\n");
   std::fflush(stdout);
 }

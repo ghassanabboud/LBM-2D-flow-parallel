@@ -91,6 +91,22 @@ main(int argc, char ** argv)
   if (cr1 > 0.0) solver.add_second_cylinder(cx1, cy1, cr1);
   solver.initialize();
 
+  const bool debug_prints = std::getenv("DEBUG_PRINTS") != nullptr;
+  if (debug_prints) {
+    if (rank == 0) std::cout << "[MPI] === after initialize ===\n" << std::flush;
+    MPI_Barrier(MPI_COMM_WORLD);
+    const std::size_t x_mid = nx / 2;
+    for (int r = 0; r < nprocs; ++r) {
+      if (rank == r) {
+        solver.print_solid_boundary_rows();
+        solver.print_solid_boundary_rows_ghost();
+        for (std::size_t gy : {std::size_t(0), std::size_t(1), ny - 2, ny - 1})
+          solver.print_point_populations(x_mid, gy);
+      }
+      MPI_Barrier(MPI_COMM_WORLD);
+    }
+  }
+
   // Which rank owns the probe row, and what is its local_y there?
   const std::size_t local_ny   = solver.local_ny();
   const int         probe_rank = int(py / local_ny);
@@ -136,13 +152,23 @@ main(int argc, char ** argv)
   const auto t0 = clk::now();
 
   for (std::size_t step = 1; step <= steps; ++step) {
+    if (debug_prints && rank == 0)
+      std::cout << "[MPI] === before step " << step
+                << " (post-stream pre-collision) ===\n" << std::flush;
+    // step() serializes print_post_stream_pre_collision rank-by-rank between
+    // exchange_halos and collide_stream when DEBUG_PRINTS is set.
     solver.step();
 
-    // Debug: print bottom row populations every 10 steps.
-    if (step % 10 == 0) {
-      if (rank == 0) std::cout << "\nStep " << step << ":\n";
-      solver.print_bottom_row_populations();
-      solver.print_ghost_row_populations();
+    if (debug_prints) {
+      if (rank == 0) std::cout << "[MPI] === after step " << step << " ===\n" << std::flush;
+      MPI_Barrier(MPI_COMM_WORLD);
+      const std::size_t x_mid = nx / 2;
+      for (int r = 0; r < nprocs; ++r) {
+        if (rank == r)
+          for (std::size_t gy : {std::size_t(0), std::size_t(1), ny - 2, ny - 1})
+            solver.print_point_populations(x_mid, gy);
+        MPI_Barrier(MPI_COMM_WORLD);
+      }
     }
 
     // Probe: owning rank computes local values; MPI_Reduce sums to rank 0.
