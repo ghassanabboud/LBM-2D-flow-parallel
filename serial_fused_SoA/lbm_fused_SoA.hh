@@ -30,6 +30,7 @@ public:
   static const int    cy[Q];   ///< Discrete velocity y-components.
   static const double w[Q];    ///< Equilibrium weights.
   static const int    opp[Q];  ///< Index of the opposite direction.
+  static const char* const dir_name[Q];  ///< Human-readable direction labels (C,E,N,W,S,NE,NW,SW,SE).
 
   /**
    * @param nx       Number of cells along x.
@@ -61,6 +62,10 @@ public:
   double vorticity(std::size_t x, std::size_t y) const;
   bool   is_solid (std::size_t x, std::size_t y) const;
 
+  void print_solid_boundary_rows() const;
+  void print_point_populations(std::size_t x, std::size_t y) const;
+  void print_post_stream_pre_collision(std::size_t x, std::size_t y) const;
+
   std::size_t nx()   const { return nx_; }
   std::size_t ny()   const { return ny_; }
   double      tau()  const { return tau_; }
@@ -76,6 +81,7 @@ private:
   void collide_stream ();   ///< Fused pull-stream + BGK collision, single pass.
   void apply_inlet    ();
   void apply_outlet   ();
+  void gather_streamed(std::size_t x, std::size_t y, double f_local[Q]) const;
 
   std::size_t nx_, ny_;
   double u_in_;

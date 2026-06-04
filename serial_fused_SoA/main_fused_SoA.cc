@@ -87,6 +87,16 @@ main(int argc, char ** argv)
   if (cr1 > 0.0) solver.add_second_cylinder(cx1, cy1, cr1);
   solver.initialize();
 
+  if (std::getenv("DEBUG_PRINTS")) {
+    std::cout << "[SoA] === after initialize ===\n";
+    const std::size_t x_mid = nx / 2;
+    solver.print_solid_boundary_rows();
+    solver.print_point_populations(x_mid, 0);
+    solver.print_point_populations(x_mid, 1);
+    solver.print_point_populations(x_mid, ny - 2);
+    solver.print_point_populations(x_mid, ny - 1);
+  }
+
   std::cout << "LBM 2D D2Q9 BGK\n"
             << "  grid          : " << nx << " x " << ny << "\n"
             << "  Re            : " << Re << "\n"
@@ -114,12 +124,34 @@ main(int argc, char ** argv)
   const auto t0 = clk::now();
 
   for (std::size_t step = 1; step <= steps; ++step) {
+
+    if (std::getenv("DEBUG_PRINTS")) {
+      std::cout << "[SoA] === before step " << step << " (post-stream pre-collision) ===\n";
+      const std::size_t x_mid = nx / 2;
+      solver.print_post_stream_pre_collision(x_mid, 0);
+      solver.print_post_stream_pre_collision(x_mid, 1);
+      solver.print_post_stream_pre_collision(x_mid, ny - 2);
+      solver.print_post_stream_pre_collision(x_mid, ny - 1);
+    }
+
     solver.step();
+
+    if (std::getenv("DEBUG_PRINTS")) {
+      std::cout << "[SoA] === after step " << step << " ===\n";
+      const std::size_t x_mid = nx / 2;
+      solver.print_solid_boundary_rows();
+      solver.print_point_populations(x_mid, 0);
+      solver.print_point_populations(x_mid, 1);
+      solver.print_point_populations(x_mid, ny - 2);
+      solver.print_point_populations(x_mid, ny - 1);
+    }
+
     probe << step << ',' << solver.ux(px, py) << ',' << solver.uy(px, py) << '\n';
     if (every > 0 && step % every == 0) {
       writer.write_snapshot(solver, double(step));
       std::cout << "\r  step " << step << " / " << steps << std::flush;
     }
+    
   }
   if (every > 0) std::cout << "\n";
 

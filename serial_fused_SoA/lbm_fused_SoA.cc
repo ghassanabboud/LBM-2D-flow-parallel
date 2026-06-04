@@ -1,6 +1,7 @@
 #include "lbm_fused_SoA.hh"
 
 #include <algorithm>
+#include <cstdio>
 
 // D2Q9 lattice constants. Indexing convention used throughout:
 //   0: rest         5: NE
@@ -18,6 +19,8 @@ const double LBM::w[9] = {
 };
 
 const int LBM::opp[9] = {0, 3, 4, 1, 2, 7, 8, 5, 6};
+
+const char* const LBM::dir_name[9] = {"C", "E", "N", "W", "S", "NE", "NW", "SW", "SE"};
 
 LBM::LBM(std::size_t nx, std::size_t ny,
          double u_in, double Re,
@@ -117,25 +120,9 @@ LBM::collide_stream()
 
       double f_local[Q];
 
-      
       // when we move k by one, all neighbours move by one as well, aka subsequent iterations of k create 9 sliding "streams"
       // the 9 accesses within one cell iteration jump between planes, but each plane forms a stride-1 stream across cell iterations.
-
-      for (int i = 0; i < Q; ++i) {
-        // this long conversion is so that if x = 0 and cx[i] = 1, sx becomes -1,
-        // not a large positive number (wrapping around due to unsigned underflow)
-        const long sx = long(x) - cx[i];
-        const long sy = long(y) - cy[i];
-        if (sx >= 0 && sx < long(nx_) && sy >= 0 && sy < long(ny_)) { //checking we're not referencing a cell outside the domain
-          const std::size_t sk = idx(std::size_t(sx), std::size_t(sy));
-          // idx converts 2D coordinates to 1D cell index; SoA: direction plane i*N + cell
-          // if the neighbour cell is solid, we take the opposite population from that cell (bounce-back)
-          f_local[i] = solid_[sk] ? f_[std::size_t(opp[i]) * nx_ * ny_ + sk]
-                                  : f_[std::size_t(i)      * nx_ * ny_ + sk]; //neighbour in-domain, solid or fluid
-        } else { // neighbour out of bounds
-          f_local[i] = f_[std::size_t(i) * nx_ * ny_ + k];
-        }
-      }
+      gather_streamed(x, y, f_local);
 
       // Collision over the new populations we just pulled
 
@@ -248,4 +235,70 @@ bool
 LBM::is_solid(std::size_t x, std::size_t y) const
 {
   return solid_[idx(x, y)] != 0;
+}
+
+void
+LBM::print_solid_boundary_rows() const
+{
+  std::printf("[SoA] solid bottom row (y=0):  ");
+  for (std::size_t x = 0; x < nx_; ++x)
+    std::printf(" x=%zu:%d", x, solid_[idx(x, 0)]);
+  std::printf("\n");
+
+  std::printf("[SoA] first fluid row on bottom (y=1):  ");
+  for (std::size_t x = 0; x < nx_; ++x)
+    std::printf(" x=%zu:%d", x, solid_[idx(x, 1)]);
+  std::printf("\n");
+
+  std::printf("[SoA] solid top row (y=%zu): ", ny_ - 1);
+  for (std::size_t x = 0; x < nx_; ++x)
+    std::printf(" x=%zu:%d", x, solid_[idx(x, ny_ - 1)]);
+  std::printf("\n");
+  std::fflush(stdout);
+
+  std::printf("[SoA] last fluid row on top (y=%zu): ", ny_ - 2);
+  for (std::size_t x = 0; x < nx_; ++x)
+    std::printf(" x=%zu:%d", x, solid_[idx(x, ny_ - 2)]);
+  std::printf("\n");
+  std::fflush(stdout);
+}
+
+void
+LBM::print_point_populations(std::size_t x, std::size_t y) const
+{
+  std::printf("[SoA] f at (x=%zu, y=%zu):", x, y);
+  for (int i = 0; i < Q; ++i)
+    std::printf(" f%s=%.6f", dir_name[i], f_[fidx(i, x, y)]);
+  std::printf("\n");
+  std::fflush(stdout);
+}
+
+void
+LBM::gather_streamed(std::size_t x, std::size_t y, double f_local[Q]) const
+{
+  const std::size_t k = idx(x, y);
+  for (int i = 0; i < Q; ++i) {
+    // cast to signed so that e.g. x=0, cx[i]=1 gives sx=-1 rather than wrapping unsigned
+    const long sx = long(x) - cx[i];
+    const long sy = long(y) - cy[i];
+    if (sx >= 0 && sx < long(nx_) && sy >= 0 && sy < long(ny_)) {
+      const std::size_t sk = idx(std::size_t(sx), std::size_t(sy));
+      f_local[i] = solid_[sk] ? f_[std::size_t(opp[i]) * nx_ * ny_ + sk]
+                              : f_[std::size_t(i)      * nx_ * ny_ + sk];
+    } else {
+      f_local[i] = f_[std::size_t(i) * nx_ * ny_ + k];
+    }
+  }
+}
+
+void
+LBM::print_post_stream_pre_collision(std::size_t x, std::size_t y) const
+{
+  double f_local[Q];
+  gather_streamed(x, y, f_local);
+  std::printf("[SoA] f_streamed at (x=%zu, y=%zu):", x, y);
+  for (int i = 0; i < Q; ++i)
+    std::printf(" f%s=%.6f", dir_name[i], f_local[i]);
+  std::printf("\n");
+  std::fflush(stdout);
 }
