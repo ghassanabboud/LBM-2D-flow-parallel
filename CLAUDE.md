@@ -25,6 +25,7 @@ an MPI implementation with a weak scaling and stron scaling analysis, a CUDA ver
 
 ## Finished tasks
 - Turned the original two-step algorithm into a one-step algorithm with pull scheme. Both SoA and AoS versions have been tested for performance and correctness. SoA version was chosen for MPI and GPU implementation.
+- Implemented MPI parallelization with domain decomposition in the y direction and halo exchange. Code was debugged and now works correctly with multiple ranks. Validated on a 800x400 grid for 60000 steps with the correct Strouhal number of 16.00.
 
 ## Current Focus
-The MPI implementation is not working and all velocity values explode and nan out within 1000 steps. Debugging is in progress to understand the cause.
+Strong and weak scaling analysis of the MPI version. 
