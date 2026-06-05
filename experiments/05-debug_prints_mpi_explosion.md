@@ -2,6 +2,8 @@
 #### **Code version:** debug prints in mpi (3b467a72e559c3a2906830eb0833f827fb7a14b3)
 ## Results and Next Steps
 
+The first step confirms that the explosion happens even with one rank, meaning the problem comes from the different handling of the top and bottom wall, not from cutting the domain in multiple ranks (this could still be a problem though with another bug, something to check).
+
 The results running the MPI version showed that the streaming on the top and bottom rows are different between the fused_SoA and MPI versions. in MPI, on the bottom row for example, streaming from the ghost rows rather than doing a check on sx means that the N, NE, and NW populations are put to 0 before streaming at each timestep, this significantly impacts the populations in the entire solid row because of collision. Hence, the values that get bounce-backed to the fluid cells on the first fluid row are not the correct one. It seems like mass is consistenly leaking from the bottom and top walls, which could explain the explosion. 
 
 Next steps: try to fix it and get it to work using one rank. This means adding an additional streaming check to make sure the solid bottom and top walls do not stream zeros from ghost rows. Once that is fixed, I can run the MPI version with more ranks and see if there are any other issues.
@@ -10,9 +12,13 @@ Next steps: try to fix it and get it to work using one rank. This means adding a
 
 [experiment 04](./04-try_fixing_mpi_explosion.md) showed that the zero velocities I observed in the gif and the probe.csv output of the MPI code were not due to vanishing populations but rather exploding populations that nan out and then get printed as 0. It also showed that the ghost rows outside the domain at the bottom of rank 0 and top of rank p are correctly kept at 0 throughout the simulation. I also tried fixing the misshandling of the solid array for ghost rows but it did not fix the explosion. 
 
+
+In this experiment, I will only use only one rank and a very small domain and only run for a couple of steps. Using only one rank means no prallelization, so the only difference between the MPI and fused_SoA codes are the handling of the ghost rows and how that impacts the streaming at the bottom and top wall. 
+
 ## Status
-**In Progress**
+**Completed**
 - **Slurm job name and ID**: 
+    - **first verification of explosion on one rank**: first test mpi job ID 54935587
     - **fused_SoA version for validation**: debug_small_SoA job ID 54924743
     - **MPI version**: debug_small_mpi job ID 54925371
 
@@ -20,7 +26,7 @@ Next steps: try to fix it and get it to work using one rank. This means adding a
 ## Expected outcomes
 
 - _Deliverables_: log prints different informative values to be compared between the fused_SoA and MPI versions.
-- _output directory_:  `out/debug_prints_run_mpi` and `out/debug_prints_run_SoA`, especially the `run.log` files.
+- _output directory_:  for the first verification `out/test_one_rank_only`, for the detailed comparison `out/debug_prints_run_mpi` and `out/debug_prints_run_SoA`, especially the `run.log` files.
 - _decisions to take_: identify the source of the explosion in the MPI.
 
 ## Resources required
@@ -47,7 +53,86 @@ In this experiment, I will only use only one rank and a very small domain and on
     - `print_point_populations()`: will need to use a global indexing logic so only the corresponding rank prints the correct point.
     - `gather_streamed()` and `print_post_stream_pre_collision()`: again need to handle global indexing. 
 
+Two analysis are carried out. In the first, I simply run the simulation for 300 steps to see if the explosion persists when using only one rank. Debug prints help visualize the explosion through very high absolute values of populations. In a second analysis, I run both the `fused_SoA` and `MPI` versions for three steps and carefully observe the streaming pattern to catch the difference.
 
+
+### first step script
+
+```bash
+#!/bin/bash
+#SBATCH --nodes 1
+#SBATCH --ntasks-per-node 1
+#SBATCH --cpus-per-task 1
+#SBATCH --time 16:0:0
+#SBATCH --output=./out/test_one_rank_only/log_%j.out
+#SBATCH --account=math-454
+#SBATCH --partition=academic
+
+module load gcc hdf5 openmpi
+
+# Each step doubles total cell count (nx*ny) by scaling both dims by sqrt(2).
+# Total points: 20K → 40K → 80K → 160K → 320K -> 640K → 1.28M
+#NX_VALS=(200 283 400 566 800 1131 1600 2263 3200)
+#NY_VALS=(100 141 200 283 400 566 800 1131 1600)
+#STEPS_VALS=(60000 60000 60000 60000 60000 60000 60000 60000 60000)
+
+NX_VALS=(200)
+NY_VALS=(100)
+STEPS_VALS=(300)
+
+# NOTE: #SBATCH --output is parsed by Slurm, not exported as a shell variable.
+# Keep the directory in sync with the --output path above.
+OUTPUT_DIR=./out/test_one_rank_only
+mkdir -p "${OUTPUT_DIR}"
+
+
+RESULTS_CSV=${OUTPUT_DIR}/results.csv
+
+# Create the CSV with header only if it does not exist yet.
+if [ ! -f "${RESULTS_CSV}" ]; then
+    echo "nx,ny,total_cells,u_in,reynolds,replicate,wall_time_s,mlups,strouhal" > ${RESULTS_CSV}
+fi
+
+U_IN=0.05
+REYNOLDS=100
+N_REPLICATES=1
+EVERY=50
+export DEBUG_PRINTS=1
+
+for i in "${!NX_VALS[@]}"; do
+    NX=${NX_VALS[$i]}
+    NY=${NY_VALS[$i]}
+    STEPS=${STEPS_VALS[$i]}
+
+    for REP in $(seq 1 ${N_REPLICATES}); do
+        # Skip this (NX, NY, replicate) triple if it already has a row in the CSV.
+        if awk -F',' -v nx="${NX}" -v ny="${NY}" -v rep="${REP}" \
+            'NR>1 && $1==nx && $2==ny && $6==rep {found=1} END {exit !found}' "${RESULTS_CSV}"; then
+            echo "Skipping NX=${NX} NY=${NY} REP=${REP} — already in ${RESULTS_CSV}"
+            continue
+        fi
+
+        SPECIFIC_OUTPUT_DIR=${OUTPUT_DIR}/nx_${NX}_ny_${NY}_rep_${REP}
+        RUN_LOG=${SPECIFIC_OUTPUT_DIR}/run.log
+        PROBE_PATH=${SPECIFIC_OUTPUT_DIR}/probe.csv
+        mkdir -p ${SPECIFIC_OUTPUT_DIR}
+        srun ./mpi/lbm_mpi nx=${NX} ny=${NY} every=${EVERY} out=${SPECIFIC_OUTPUT_DIR}/lbm probe=${PROBE_PATH} re=${REYNOLDS} u_in=${U_IN} steps=${STEPS} \
+            | tee ${RUN_LOG}
+        WALL=$(awk '/Wall time/{print $4}' ${RUN_LOG})
+        MLUPS=$(awk '/MLUPS/{print $3}'    ${RUN_LOG})
+
+        DIAMETER=$(awk '/diameter/{print $3}' ${RUN_LOG})
+        echo "Diameter: ${DIAMETER}"
+        ST_LOG=${OUTPUT_DIR}/strouhal_nx_${NX}_ny_${NY}_rep_${REP}.log
+        python3 viz/strouhal.py ${PROBE_PATH} --u-in ${U_IN} --diameter ${DIAMETER} \
+            | tee ${ST_LOG}
+        ST=$(awk '/^St/{print $3}' ${ST_LOG})
+
+        echo "${NX},${NY},$((NX*NY)),${U_IN},${REYNOLDS},${REP},${WALL},${MLUPS},${ST}" >> ${RESULTS_CSV}
+    done
+done
+
+```
 ### SoA script
 
 
