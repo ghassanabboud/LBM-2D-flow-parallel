@@ -213,27 +213,18 @@ LBM::collide_stream()
       // - if the neighbour is fluid and inside the domain, we take the value from that cell and population
       // - if the neighbour is solid and inside the domain, we take the value from the opposite population of that cell (bounce-back)
       // - if the neighbour is outside the domain, we keep the current value in f_local, which will be overwritten if on inlet/outlet and is never used otherwise (e.g. on the top/bottom walls)
-      // MPI SPECIFIC NOTE: we only do checks on x out-of-bounds now because ghost rows on the first and last rank
-      // take care of y out-of-bounds. These fictitious rows are 0 on initialization, never get populated through exchanges and thus have zero effect.
+      // MPI SPECIFIC NOTE: we check both x and global-y out-of-bounds. Middle-rank ghost rows
+      // contain valid halo data so their global y is in [0, ny_) and the check passes.
+      // Boundary ghost rows (rank 0 bottom ghost at global y=-1, last rank top ghost at global
+      // y=ny_) are outside the domain and must fall back to keeping the current value, matching
+      // the SoA treatment of out-of-domain neighbours.
 
 
       // once we have gathered all of this into f_local, we have all the data we need to do the collision step for cell k before writing the post-collision values to ftmp_
       // we still need to have two arrays because changing f_ directly would change the values used for the next cells within one step
       double f_local[Q];
-
-      for (int i = 0; i < Q; ++i) {
-        const long sx = long(x)       - cx[i];
-        const long sy = long(local_y) - cy[i];  // always in [0, local_ny_+1]
-        if (sx >= 0 && sx < long(nx_)) {
-          const std::size_t sk = std::size_t(sy) * nx_ + std::size_t(sx);
-          f_local[i] = solid_[sk]
-            ? f_[std::size_t(opp[i]) * N_local_ + sk]
-            : f_[std::size_t(i)      * N_local_ + sk];
-        } else {
-          f_local[i] = f_[std::size_t(i) * N_local_ + k];
-        }
-      }
-
+      gather_streamed(x, local_y, f_local);
+      
       double rho = 0.0, mx = 0.0, my = 0.0;
       for (int i = 0; i < Q; ++i) {
         rho += f_local[i];
@@ -420,9 +411,10 @@ LBM::gather_streamed(std::size_t x, std::size_t local_y, double f_local[Q]) cons
 {
   const std::size_t k = lidx(x, local_y);
   for (int i = 0; i < Q; ++i) {
-    const long sx = long(x)       - cx[i];
-    const long sy = long(local_y) - cy[i];  // always in [0, local_ny_+1] for data rows
-    if (sx >= 0 && sx < long(nx_)) {
+    const long sx        = long(x)       - cx[i];
+    const long sy        = long(local_y) - cy[i];
+    const long global_sy = long(y_start_) + sy - 1;
+    if (sx >= 0 && sx < long(nx_) && global_sy >= 0 && global_sy < long(ny_)) {
       const std::size_t sk = std::size_t(sy) * nx_ + std::size_t(sx);
       f_local[i] = solid_[sk] ? f_[std::size_t(opp[i]) * N_local_ + sk]
                                : f_[std::size_t(i)      * N_local_ + sk];
