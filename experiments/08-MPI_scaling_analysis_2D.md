@@ -1,4 +1,4 @@
-# Experiment 07: MPI scaling analysis
+# Experiment 08: MPI scaling analysis along two dimensions
 #### **Code version:** weak scaling along 2D (30eb115bda09dd57b47c42e98bdfb116ed1faa28)
 ## Results and Next Steps
 
@@ -21,7 +21,7 @@ Strong and weak scaling analysis of the MPI version are good but I wondered whet
 
 
 ## Status
-**In Progress**
+**Completed**
 - **Slurm job name and ID**: all jobs called 2D_weak_scaling_mpi, job ID 54949460, 54949462, 54949463, 54949464
 
 

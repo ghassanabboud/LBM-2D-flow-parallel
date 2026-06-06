@@ -14,7 +14,7 @@ The MPI code was fixed and validated in [the previous experiment](./06-fix_top_b
 
 
 ## Status
-**In Progress**
+**Completed**
 - **Slurm job name and ID**: 
     - **strong scaling**: all jobs called strong_scaling_mpi, job ID 54936833, and 54937077-54937081, 54937278
     - **weak scaling**: all jobs called weak_scaling_mpi, job ID 54937101-54937106, 54937337, 54947667, 54947668 
