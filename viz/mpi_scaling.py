@@ -65,10 +65,12 @@ plt.close(fig)
 
 # ── Weak scaling ───────────────────────────────────────────────────────────────
 CSV_WEAK = "./out/weak_scaling_mpi/results.csv"
+CSV_WEAK_2D = "./out/weak_scaling_mpi_2D/results.csv"  
 OUT_WEAK = "weak_scaling.png"
 # ──────────────────────────────────────────────────────────────────────────────
 
 dw = pd.read_csv(CSV_WEAK)
+dw_2D = pd.read_csv(CSV_WEAK_2D)
 
 # Efficiency: T(1)/T(p) = MLUPS(p) / (p × MLUPS(1)).
 # MLUPS already accounts for total cell count, so dividing by p normalises
@@ -76,23 +78,32 @@ dw = pd.read_csv(CSV_WEAK)
 mlups_1_weak = dw.loc[dw["nranks"] == 1, "mlups"].mean()
 dw["efficiency"] = dw["mlups"] / (dw["nranks"] * mlups_1_weak)
 
+mlups_1_weak_2D = dw_2D.loc[dw_2D["nranks"] == 1, "mlups"].mean()
+dw_2D["efficiency"] = dw_2D["mlups"] / (dw_2D["nranks"] * mlups_1_weak_2D)
+
 ranks_w = sorted(dw["nranks"].unique())
+ranks_w_2D = sorted(dw_2D["nranks"].unique())
 
 fig2, ax2 = plt.subplots(figsize=(7, 5))
 
 sns.lineplot(data=dw, x="nranks", y="efficiency", estimator="mean",
              errorbar="sd", color="tab:blue", linewidth=1.8,
-             label="Measured (mean ± sd)", ax=ax2)
+             label="Weak scaling along rows", ax=ax2)
+
+sns.lineplot(data=dw_2D, x="nranks", y="efficiency", estimator="mean",
+             errorbar="sd", color="tab:orange", linewidth=1.8,
+             label="Weak scaling along both dimensions", ax=ax2)
+
 
 ax2.axhline(1.0, color="k", linestyle="--", linewidth=1.0, label="Ideal (efficiency = 1)")
 
 ax2.set_xscale("log", base=2)
-ax2.set_xticks(ranks_w)
-ax2.set_xticklabels(ranks_w)
+ax2.set_xticks([1,2,4,8,16,32,64])
+ax2.set_xticklabels([1,2,4,8,16,32,64])
 ax2.set_ylim(0, 1.2)
 ax2.set_xlabel("Number of MPI ranks")
 ax2.set_ylabel(r"Parallel efficiency  $E(p) = T_1 / T_p$")
-ax2.set_title("Weak scaling — MPI LBM (400×200 per rank, 60 000 steps)")
+ax2.set_title("Weak scaling — MPI LBM (80K lattice points per rank, 60 000 steps)")
 ax2.legend(title=None)
 ax2.grid(True, which="both", linestyle="--", linewidth=0.4, alpha=0.5)
 
@@ -117,8 +128,8 @@ ax3.plot(ranks_w, ideal_mlups, "k--", linewidth=1.0, label="Ideal (linear)")
 
 ax3.set_xscale("log", base=2)
 ax3.set_yscale("log", base=2)
-ax3.set_xticks(ranks_w)
-ax3.set_xticklabels(ranks_w)
+ax3.set_xticks([1,2,4,8,16,32,64])
+ax3.set_xticklabels([1,2,4,8,16,32,64])
 ax3.set_xlabel("Number of MPI ranks")
 ax3.set_ylabel("Throughput [MLUPS]")
 ax3.set_title("Weak scaling — MPI LBM (400×200 per rank, 60 000 steps)")
