@@ -28,7 +28,7 @@ Strong and weak scaling analysis of the MPI version are good but I wondered whet
 ## Expected outcomes
 
 - _Deliverables_: results.csv with wall time, MLUPS to be turned into plots showing the weak scaling of the MPI version along 2D.
-- _output directory_:  `out/weak_scaling_mpi_2D` and figure in `./figures/scalings_mpi_2D`.
+- _output directory_:  `out/weak_scaling_mpi_2D` and figure in `./figures/scalings_mpi_row_wise`.
 - _decisions to take_: Analysis of 2D based weak scaling to be included in the report. Decide whether it calls for an MPI cart implementation.
 
 ## Resources required
