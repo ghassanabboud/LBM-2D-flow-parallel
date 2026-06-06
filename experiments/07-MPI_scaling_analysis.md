@@ -21,7 +21,7 @@ The MPI code was fixed and validated in [the previous experiment](./06-fix_top_b
 ## Expected outcomes
 
 - _Deliverables_: results.csv with wall time, MLUPS to be turned into plots showing the strong and weak scaling of the MPI version.
-- _output directory_:  `./out/strong_scaling_mpi` and `./out/weak_scaling_mpi`, `perf_evaluation_SoA` for the perf evaluation of the fused_SoA version to determine alpha. 
+- _output directory_:  `./out/strong_scaling_mpi` and `./out/weak_scaling_mpi`, `perf_evaluation_SoA` for the perf evaluation of the fused_SoA version to determine alpha. figures in `./figures/scalings_mpi`.
 - _decisions to take_: Analysis of scaling to be included in the report. Decide whether it follows the appropriate scaling laws.
 
 ## Resources required
