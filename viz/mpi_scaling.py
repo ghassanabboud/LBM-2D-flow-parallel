@@ -16,14 +16,14 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import os
 
-FOLDER = "./figs/scalings_mpi_cart/"
+FOLDER = "./figs/scalings_mpi_row_wise/"
 os.makedirs(FOLDER, exist_ok=True)
 plt.rcParams.update({
     "font.size": 15
 })
 
 # ── Configuration ─────────────────────────────────────────────────────────────
-CSV   = "./out/cart_strong_scaling_mpi/results.csv"
+CSV   = "./out/strong_scaling_mpi/results.csv"
 ALPHA = 0.9942   # parallelisable fraction for Amdahl's law  (0 < alpha <= 1)
 OUT   = FOLDER + "strong_scaling.png"
 # ──────────────────────────────────────────────────────────────────────────────
@@ -72,8 +72,8 @@ print(f"Saved {OUT}")
 plt.close(fig)
 
 # ── Weak scaling ───────────────────────────────────────────────────────────────
-CSV_WEAK = "./out/cart_weak_scaling_mpi/results.csv"
-CSV_WEAK_2D = "./out/cart_weak_scaling_mpi_2D/results.csv"  
+CSV_WEAK = "./out/weak_scaling_mpi/results.csv"
+CSV_WEAK_2D = "./out/weak_scaling_mpi_2D/results.csv"  
 OUT_WEAK = FOLDER + "weak_scaling_efficiency.png"
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -99,7 +99,7 @@ sns.lineplot(data=dw, x="nranks", y="efficiency", estimator="mean",
              label="Weak scaling along rows", ax=ax2)
 
 sns.lineplot(data=dw_2D, x="nranks", y="efficiency", estimator="mean",
-             errorbar="sd", color="tab:orange", linewidth=1.8,
+             errorbar="sd", color="lightblue", linewidth=1.8,
              label="Weak scaling along both dimensions", ax=ax2)
 
 
@@ -139,7 +139,7 @@ sns.lineplot(data=dw, x="nranks", y="speedup", estimator="mean",
              errorbar="sd", color="tab:blue", linewidth=1.8,
              label="Weak scaling along rows", ax=ax3)
 sns.lineplot(data=dw_2D, x="nranks", y="speedup", estimator="mean",
-             errorbar="sd", color="tab:orange", linewidth=1.8,
+             errorbar="sd", color="lightblue", linewidth=1.8,
              label="Weak scaling along both dimensions", ax=ax3)
 
 ax3.plot(p_smooth, p_smooth,
