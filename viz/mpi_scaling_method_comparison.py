@@ -21,6 +21,7 @@ os.makedirs(FOLDER, exist_ok=True)
 plt.rcParams.update({
     "font.size": 15
 })
+LABEL_SIZE = 18
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 CSV   = "./out/strong_scaling_mpi/results.csv"
@@ -62,14 +63,14 @@ ax.plot(p_smooth, 1.0 / ((1.0 - ALPHA) + ALPHA / p_smooth),
 ceiling = 1.0 / (1.0 - ALPHA)
 ax.axhline(ceiling, color="gray", linestyle=":", linewidth=0.8)
 ax.text(max(ranks), ceiling * 1.03, f"max S = {ceiling:.0f}",
-        fontsize=8, ha="right", va="bottom", color="gray")
+        fontsize=15, ha="right", va="bottom", color="gray")
 
 ax.set_xscale("log", base=2)
 ax.set_yscale("log", base=2)
 ax.set_xticks(ranks)
 ax.set_xticklabels(ranks)
-ax.set_xlabel("Number of MPI ranks")
-ax.set_ylabel(r"Speedup  $S(p) = \mathrm{MLUPS}(p)\,/\,\mathrm{MLUPS}(1)$")
+ax.set_xlabel("Number of MPI ranks", fontsize=LABEL_SIZE)
+ax.set_ylabel(r"Speedup  $S(p) = \mathrm{MLUPS}(p)\,/\,\mathrm{MLUPS}(1)$", fontsize=LABEL_SIZE)
 #ax.set_title("Strong scaling — MPI LBM (1600x800, 60 000 steps)")
 ax.set_title("")
 ax.legend(title=None)
@@ -129,8 +130,8 @@ ax2.set_xscale("log", base=2)
 ax2.set_xticks([1,2,4,8,16,32,64])
 ax2.set_xticklabels([1,2,4,8,16,32,64])
 ax2.set_ylim(0, 1.2)
-ax2.set_xlabel("Number of MPI ranks")
-ax2.set_ylabel(r"Parallel efficiency  $E(p) = T_1 / T_p$")
+ax2.set_xlabel("Number of MPI ranks", fontsize=LABEL_SIZE)
+ax2.set_ylabel(r"Parallel efficiency  $E(p) = T_1 / T_p$", fontsize=LABEL_SIZE)
 #ax2.set_title("Weak scaling — MPI LBM (80K lattice points per rank, 60 000 steps)")
 ax2.set_title("")
 ax2.legend(title=None)
@@ -173,8 +174,8 @@ ax3.set_xscale("log", base=2)
 ax3.set_yscale("log", base=2)
 ax3.set_xticks([1,2,4,8,16,32,64])
 ax3.set_xticklabels([1,2,4,8,16,32,64])
-ax3.set_xlabel("Number of MPI ranks")
-ax3.set_ylabel(r"Speedup  $S(p) = \mathrm{MLUPS}(p)\,/\,\mathrm{MLUPS}(1)$")
+ax3.set_xlabel("Number of MPI ranks", fontsize=LABEL_SIZE)
+ax3.set_ylabel(r"Speedup  $S(p) = \mathrm{MLUPS}(p)\,/\,\mathrm{MLUPS}(1)$", fontsize=LABEL_SIZE)
 #ax3.set_title("Weak scaling — MPI LBM (400×200 per rank, 60 000 steps)")
 ax3.set_title("")
 ax3.legend(title=None)
