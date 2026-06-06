@@ -4,7 +4,7 @@
 Usage:
     python3 viz.py out/lbm.xdmf [--field vorticity] [--out vorticity.gif]
                                [--clim -0.05 0.05] [--cmap RdBu_r]
-                               [--width 1000]
+                               [--width 1000] [--nsteps N]
 
 The script parses the XDMF index to find each snapshot's HDF5 file, reads
 the fields directly with h5py, and writes a GIF via PyVista.
@@ -84,6 +84,8 @@ def main():
     ap.add_argument("--clim",  type=float, nargs=2, default=None,
                     help="Manual color limits, e.g. --clim -0.05 0.05")
     ap.add_argument("--width", type=int, default=1000, help="Window width in pixels")
+    ap.add_argument("--nsteps", type=int, default=None,
+                    help="Only render the first N steps (default: all)")
     args = ap.parse_args()
 
     if not args.xdmf.exists():
@@ -97,6 +99,9 @@ def main():
     steps = [(t, f) for t, f in steps if args.field in f]
     if not steps:
         sys.exit(f"Field '{args.field}' not found in XDMF snapshots.")
+
+    if args.nsteps is not None:
+        steps = steps[: args.nsteps]
 
     # Read all arrays to determine color limits.
     arrays = []
