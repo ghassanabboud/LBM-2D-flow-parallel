@@ -16,6 +16,7 @@ an MPI implementation with a weak scaling and stron scaling analysis, a CUDA ver
     - serial_fused_SoA: one-step algorithm with a Structure of Arrays (SoA) memory layout, but used for parallelization because literature indicates it runs better on GPUs.
     - mpi: parallelization of the one-step algorithm with a SoA memory layout using MPI, with domain decomposition in the x direction and halo exchange.
     - mpi_cart: parallelization of the one-step algorithm with a SoA memory layout using MPI, with domain decomposition in both x and y directions and halo exchange.
+    - cuda_SoA: parallelization of the one-step algorithm with a SoA memory layout using CUDA
 
 - experiments: each markdown file describes a slurm experiment, its setup and the decisions taken from its results.
 
@@ -32,4 +33,4 @@ an MPI implementation with a weak scaling and stron scaling analysis, a CUDA ver
 
 ## Current Focus
 
-Implementing cuda version to run on one V100 GPU. 
+testing the cuda_SoA version
