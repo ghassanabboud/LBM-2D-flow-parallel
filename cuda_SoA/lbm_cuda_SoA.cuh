@@ -57,7 +57,10 @@ public:
 
   /// Advance the simulation by one time step: launches 3 kernels, swaps
   /// d_f_ / d_ftmp_ device pointers (no data copy).
-  void step();
+  /// block_x/block_y: thread-block dimensions (1D: block_y=1, 2D: block_y>1).
+  /// grid_x/grid_y:   grid dimensions; must satisfy
+  ///                  grid_x * block_x >= nx and grid_y * block_y >= ny.
+  void step(int block_x, int block_y, int grid_x, int grid_y);
 
   /// Copy d_f_ from device to h_f_ on host.  Must be called before using
   /// rho(), ux(), uy(), vorticity().

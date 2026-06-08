@@ -72,6 +72,29 @@ main(int argc, char ** argv)
   const double cy1 = get<double>(kv, "cyl2_y", -1.0);
   const double cr1 = get<double>(kv, "cyl2_r", -1.0);
 
+  // CUDA launch configuration.
+  // block_x / block_y: thread-block dimensions.
+  //   1D mode: block_y=1 (default), grid_y=1 → each thread maps to one cell
+  //            via k = blockIdx.x * blockDim.x + threadIdx.x.
+  //   2D mode: block_y > 1 → thread (tx,ty) maps to (x,y); coalescing is
+  //            preserved only when block_x is a multiple of 32.
+  // grid_x / grid_y: grid dimensions. Defaults to the minimum required to
+  //   cover the full domain; may be overridden to experiment with padding.
+  const int block_x = get<int>(kv, "block_x", 256);
+  const int block_y = get<int>(kv, "block_y", 1);
+
+  const int default_grid_x = (int(nx) + block_x - 1) / block_x;
+  const int default_grid_y = (int(ny) + block_y - 1) / block_y;
+  const int grid_x  = get<int>(kv, "grid_x",  default_grid_x);
+  const int grid_y  = get<int>(kv, "grid_y",  default_grid_y);
+
+  if (grid_x < default_grid_x || grid_y < default_grid_y) {
+    std::cerr << "Error: grid (" << grid_x << "," << grid_y
+              << ") is too small to cover domain (" << nx << "," << ny
+              << ") with block (" << block_x << "," << block_y << ").\n";
+    return 1;
+  }
+
   // Output.
   const std::size_t every     = get<std::size_t>(kv, "every", 500);
   const std::string out_pref  = get_string(kv, "out", "out/lbm");
@@ -87,7 +110,11 @@ main(int argc, char ** argv)
   solver.initialize();
 
   std::cout << "LBM 2D D2Q9 BGK — CUDA SoA\n"
-            << "  grid          : " << nx << " x " << ny << "\n"
+            << "  domain        : " << nx << " x " << ny << "\n"
+            << "  block         : " << block_x << " x " << block_y
+            << (block_y == 1 ? " (1-D)" : " (2-D)") << "\n"
+            << "  grid          : " << grid_x  << " x " << grid_y
+            << (grid_y  == 1 ? " (1-D)" : " (2-D)") << "\n"
             << "  Re            : " << Re << "\n"
             << "  u_in          : " << u_in << "\n"
             << "  tau           : " << solver.tau() << "\n"
@@ -114,7 +141,7 @@ main(int argc, char ** argv)
 
   for (std::size_t step = 1; step <= steps; ++step) {
 
-    solver.step();
+    solver.step(block_x, block_y, grid_x, grid_y);
 
     // fetch_probe_uxy uses cudaMemcpy2D (9 doubles) and implicitly
     // synchronises the stream, so the GPU is idle between steps when

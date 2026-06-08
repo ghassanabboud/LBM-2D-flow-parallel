@@ -47,30 +47,34 @@ static const int    h_opp[9] = {0, 3, 4, 1, 2, 7, 8, 5, 6};
 // ---------------------------------------------------------------------------
 // Kernel 1: fused pull-stream + BGK collision.
 //
-// One thread per cell.  Block size 256 (8 warps); grid covers all N = nx*ny
-// cells.  __launch_bounds__(256, 4) tells the compiler to target 4 blocks
-// per SM — achieving the 32 warps/SM needed for full V100 occupancy — and
-// to manage register allocation accordingly.
+// One thread per cell.  Supports both 1D and 2D block/grid configurations:
 //
-// The SoA layout d_f[i*N + k] ensures that threads with consecutive k values
-// (consecutive x-positions in the same row) access consecutive addresses for
-// each direction i — a single 256-byte HBM2 transaction per warp per
-// direction.
+//   1D (block_y = 1): thread k = blockIdx.x * blockDim.x + threadIdx.x maps
+//     to cell k; x = k % nx, y = k / nx.  Consecutive threads in a warp
+//     have consecutive k → consecutive x at fixed y, giving stride-1 reads.
+//
+//   2D (block_y > 1): thread (tx, ty) in block (bx, by) maps to cell
+//     (x = bx*blockDim.x + tx, y = by*blockDim.y + ty).  Coalescing is
+//     preserved when blockDim.x is a multiple of 32; if it is not (e.g.
+//     16×16 blocks), each warp wraps two rows and reads are uncoalesced.
+//
+// The SoA layout d_f[i*N + k] ensures stride-1 access in x for both modes
+// when blockDim.x >= 32.
 //
 // d_solid is accessed via __ldg() which routes through the read-only L1 cache.
 // ---------------------------------------------------------------------------
-__global__ void __launch_bounds__(256, 4)
+__global__ void
 lbm_collide_stream_kernel(const double* __restrict__ d_f,
                            double*       __restrict__ d_ftmp,
                            const uint8_t*             d_solid,
                            int nx, int ny, int N,
                            double inv_tau)
 {
-  const int k = blockIdx.x * blockDim.x + threadIdx.x;
-  if (k >= N) return;
+  const int x = blockIdx.x * blockDim.x + threadIdx.x;
+  const int y = blockIdx.y * blockDim.y + threadIdx.y;
+  if (x >= nx || y >= ny) return;
 
-  const int x = k % nx;
-  const int y = k / nx;
+  const int k = y * nx + x;
 
   // Pull streaming: for each direction i we read from the upstream neighbour.
   // Three cases (matching serial gather_streamed):
@@ -259,21 +263,23 @@ LBM::initialize()
 }
 
 void
-LBM::step()
+LBM::step(int block_x, int block_y, int grid_x, int grid_y)
 {
-  const int block  = 256;
-  const int grid_N = (int(N_) + block - 1) / block;
-  const int grid_y = (int(ny_) + block - 1) / block;
+  const dim3 block(block_x, block_y);
+  const dim3 grid (grid_x,  grid_y);
 
-  lbm_collide_stream_kernel<<<grid_N, block>>>(
+  lbm_collide_stream_kernel<<<grid, block>>>(
       d_f_, d_ftmp_, d_solid_,
       int(nx_), int(ny_), int(N_), 1.0 / tau_);
 
-  // Inlet and outlet modify d_ftmp_ (the output buffer of collide_stream).
-  lbm_inlet_kernel <<<grid_y, block>>>(d_ftmp_, d_solid_,
-                                        int(nx_), int(ny_), int(N_), u_in_);
-  lbm_outlet_kernel<<<grid_y, block>>>(d_ftmp_,
-                                        int(nx_), int(ny_), int(N_));
+  // Inlet and outlet are 1D over y: flatten block to total threads per block
+  // so they work regardless of whether the caller chose a 1D or 2D block.
+  const int bc_block = int(block.x) * int(block.y);
+  const int bc_grid  = (int(ny_) + bc_block - 1) / bc_block;
+  lbm_inlet_kernel <<<bc_grid, bc_block>>>(d_ftmp_, d_solid_,
+                                            int(nx_), int(ny_), int(N_), u_in_);
+  lbm_outlet_kernel<<<bc_grid, bc_block>>>(d_ftmp_,
+                                            int(nx_), int(ny_), int(N_));
 
   // Swap device pointers — no data movement, O(1) cost.
   double* tmp = d_f_;
