@@ -7,5 +7,6 @@ lbm_serial_fused_AoS
 lbm_serial_fused_SoA
 lbm_mpi
 lbm_mpi_cart
+lbm_cuda_SoA
 stream
 dgemm
