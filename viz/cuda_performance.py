@@ -6,7 +6,7 @@ import os
 #properties of problem
 FLOPS_per_LU = 185
 max_BW_in_GBs = 900
-bytes_per_LU = 216
+bytes_per_LU = 144
 
 # file paths
 OUTPUT_DIR = "./out/"
