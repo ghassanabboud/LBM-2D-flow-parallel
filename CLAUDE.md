@@ -15,6 +15,7 @@ an MPI implementation with a weak scaling and stron scaling analysis, a CUDA ver
     - serial_fused_AoS: one-step algorithm with an Array of Structures (AoS) memory layout, most performant on a single CPU
     - serial_fused_SoA: one-step algorithm with a Structure of Arrays (SoA) memory layout, but used for parallelization because literature indicates it runs better on GPUs.
     - mpi: parallelization of the one-step algorithm with a SoA memory layout using MPI, with domain decomposition in the x direction and halo exchange.
+    - mpi_cart: parallelization of the one-step algorithm with a SoA memory layout using MPI, with domain decomposition in both x and y directions and halo exchange.
 
 - experiments: each markdown file describes a slurm experiment, its setup and the decisions taken from its results.
 
@@ -27,7 +28,8 @@ an MPI implementation with a weak scaling and stron scaling analysis, a CUDA ver
 - Turned the original two-step algorithm into a one-step algorithm with pull scheme. Both SoA and AoS versions have been tested for performance and correctness. SoA version was chosen for MPI and GPU implementation.
 - Implemented MPI parallelization with domain decomposition in the y direction and halo exchange. Code was debugged and now works correctly with multiple ranks. Validated on a 800x400 grid for 60000 steps with the correct Strouhal number of 16.00.
 - Strong and Weak scaling analysis of the MPI version. strong scaling shows good parallel efficiency but decays sooner than Amdahl's law would predict (communication overhead). Weak scaling shows great performance when only scaling the number of rows (above 0.9 efficiency at 64 ranks). When scaling both dimensions, performance much worse, dropping below 0.4 at 64 ranks. Explanation: the rows get longer and the communication/computation ratio increases.
+- MPI cart version with domain decomposition in 2D implemented and tested. Shows much better performance when scaling both dimensions.
 
 ## Current Focus
 
-Implementing an MPI cart version that splits both dimensions.
+Implementing cuda version to run on one V100 GPU. 
