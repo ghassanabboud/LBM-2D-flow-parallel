@@ -103,17 +103,19 @@ srun --nodes=1 --ntasks=16  ./mpi_row/lbm_mpi_row nx=800 ny=400 u_in=0.05 re=100
 Run with `srun` on SCITAS EPFL clusters. 
 
 ```bash
+mkdir -p out
+
 # 1D thread blocks of 256 threads along x (default, recommended)
 srun --gres=gpu:1 --nodes=1 --partition=gpu \
-  ./cuda_SoA/lbm_cuda_SoA nx=4096 ny=2048 u_in=0.05 re=100 steps=60000 every=500
+  ./cuda_SoA/lbm_cuda_SoA nx=4096 ny=2048 u_in=0.05 re=100 steps=60000 every=500 out=out/lbm_cuda_SoA
 
 # Override block dimensions for a 2D configuration
 srun --gres=gpu:1 --nodes=1 --partition=gpu \
-  ./cuda_SoA/lbm_cuda_SoA nx=4096 ny=2048 u_in=0.05 re=100 steps=60000 every=500 block_x=64 block_y=4
+  ./cuda_SoA/lbm_cuda_SoA nx=4096 ny=2048 u_in=0.05 re=100 steps=60000 every=500 block_x=64 block_y=4 out=out/lbm_cuda_SoA_block64x4
 
 # AoS layout version
 srun --gres=gpu:1 --nodes=1 --partition=gpu \
-  ./cuda_AoS/lbm_cuda_AoS nx=4096 ny=2048 u_in=0.05 re=100 steps=60000 every=500
+  ./cuda_AoS/lbm_cuda_AoS nx=4096 ny=2048 u_in=0.05 re=100 steps=60000 every=500 out=out/lbm_cuda_AoS
 ```
 
 ### Performance sweep configurations
@@ -193,11 +195,10 @@ and inlet/outlet boundary conditions. The solver records:
 ## Visualization
 
 The two scripts in `viz/` consume the solver output. They depend on a
-small set of Python packages — install them with `pip` or `conda`:
+small set of Python packages — install them with `pip`:
 
 ```bash
 pip install pyvista numpy h5py imageio matplotlib
-# or, if you created the conda env above, these are already installed.
 ```
 
 Then:
