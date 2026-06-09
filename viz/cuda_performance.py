@@ -2,6 +2,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 import os
+import numpy as np
 
 #properties of problem
 FLOPS_per_LU = 185
@@ -82,10 +83,10 @@ sns.lineplot(data=perf_1D_SoA, x="block_x", y="mlups", estimator="mean",
              errorbar="sd", color="green", hue="label", style="label", linewidth=1.8, ax=ax1, palette="Set1")
 
 
-
+tick_blocks = [block_x for block_x in block_x_values if np.log2(block_x)%1==0]
 ax1.set_xscale("log", base=2)
-ax1.set_xticks(block_x_values)
-ax1.set_xticklabels(block_x_values, rotation=90, fontsize=8)
+ax1.set_xticks(tick_blocks)
+ax1.set_xticklabels(tick_blocks, rotation=90, fontsize=8)
 ax1.set_xlabel("Block size in x direction", fontsize=14)
 ax1.set_ylabel("Performance (MLUPs)", fontsize=14)
 #ax1.set_title("Performance vs block_x (1D sweep)", fontsize=16)
@@ -114,8 +115,8 @@ sns.lineplot(data=perf_1D_SoA, x="block_x", y="mlups", estimator="mean",
 
 
 ax1.set_xscale("log", base=2)
-ax1.set_xticks(block_x_values)
-ax1.set_xticklabels(block_x_values, rotation=90, fontsize=8)
+ax1.set_xticks(tick_blocks)
+ax1.set_xticklabels(tick_blocks, rotation=90, fontsize=8)
 ax1.set_xlabel("Block size in x direction", fontsize=14)
 ax1.set_ylabel("Performance (MLUPs)", fontsize=14)
 #ax1.set_title("Performance vs block_x (1D sweep)", fontsize=16)
