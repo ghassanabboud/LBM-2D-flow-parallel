@@ -144,9 +144,7 @@ main(int argc, char ** argv)
     solver.step(block_x, block_y, grid_x, grid_y);
 
     // fetch_probe_uxy uses cudaMemcpy2D (9 doubles) and implicitly
-    // synchronises the stream, so the GPU is idle between steps when
-    // probe output is enabled.  For pure throughput benchmarks, redirect
-    // probe_csv to /dev/null and the sync overhead disappears.
+    // synchronises the stream, so the GPU is idle between steps
     double pux = 0.0, puy = 0.0;
     solver.fetch_probe_uxy(px, py, pux, puy);
     probe << step << ',' << pux << ',' << puy << '\n';

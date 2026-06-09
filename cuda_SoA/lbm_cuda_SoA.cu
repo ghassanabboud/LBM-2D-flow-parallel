@@ -19,8 +19,7 @@
 
 // ---------------------------------------------------------------------------
 // D2Q9 lattice constants in __constant__ memory.
-// All 32 threads in a warp read the same index each iteration, so every
-// access hits the constant-cache broadcast path — zero extra HBM2 traffic.
+.
 // Indexing convention:
 //   0: rest   1: E   2: N   3: W   4: S   5: NE   6: NW   7: SW   8: SE
 // ---------------------------------------------------------------------------
@@ -196,6 +195,7 @@ LBM::LBM(std::size_t nx, std::size_t ny,
   CUDA_CHECK(cudaMalloc(&d_solid_, N_ * sizeof(uint8_t)));
 
   // Build solid mask on host.
+  // decided to do that because then I can store it in read-only cache and save global memory bandwidth
   for (std::size_t x = 0; x < nx_; ++x) {
     h_solid_[idx(x, 0)]       = 1;   // bottom wall
     h_solid_[idx(x, ny_ - 1)] = 1;   // top wall
@@ -236,6 +236,7 @@ LBM::mark_obstacle(double c_x, double c_y, double r)
     }
 }
 
+//only called once so not worth a kernel
 void
 LBM::initialize()
 {
@@ -281,7 +282,6 @@ LBM::step(int block_x, int block_y, int grid_x, int grid_y)
   lbm_outlet_kernel<<<bc_grid, bc_block>>>(d_ftmp_,
                                             int(nx_), int(ny_), int(N_));
 
-  // Swap device pointers — no data movement, O(1) cost.
   double* tmp = d_f_;
   d_f_        = d_ftmp_;
   d_ftmp_     = tmp;

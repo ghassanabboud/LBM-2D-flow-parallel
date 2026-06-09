@@ -19,8 +19,6 @@
 
 // ---------------------------------------------------------------------------
 // D2Q9 lattice constants in __constant__ memory.
-// All 32 threads in a warp read the same index each iteration, so every
-// access hits the constant-cache broadcast path — zero extra HBM2 traffic.
 // Indexing convention:
 //   0: rest   1: E   2: N   3: W   4: S   5: NE   6: NW   7: SW   8: SE
 // ---------------------------------------------------------------------------
@@ -60,8 +58,6 @@ static constexpr int kQ = 9;
 //
 // AoS layout: d_f[k*Q + i].
 //   - All Q populations for cell k are contiguous in memory.
-//   - Within a single thread, the inner loop over i reads Q consecutive
-//     doubles: good sequential locality.
 //   - Across threads in a warp (consecutive k), each direction i is accessed
 //     at stride Q=9 doubles — not fully coalesced (contrast with SoA stride-1).
 //

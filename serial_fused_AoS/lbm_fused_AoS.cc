@@ -160,8 +160,7 @@ void
 LBM::apply_inlet()
 {
   // Reset the inlet column to the equilibrium distribution corresponding
-  // to a prescribed uniform velocity (u_in, 0) and unit density. Simple,
-  // stable, and accurate enough for moderate Reynolds numbers.
+  // to a prescribed uniform velocity (u_in, 0) and unit density.
   const std::size_t x = 0;
   for (std::size_t y = 0; y < ny_; ++y) {
     if (solid_[idx(x, y)]) continue;

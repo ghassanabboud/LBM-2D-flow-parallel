@@ -41,7 +41,7 @@ LBM::LBM(std::size_t nx, std::size_t ny,
 {
   MPI_Comm_size(comm, &nprocs_);
 
-  // 1. Find a balanced 2D process grid [prows, pcols].
+  // Find a balanced 2D process grid [prows, pcols].
   cart_dims_[0] = cart_dims_[1] = 0;
   MPI_Dims_create(nprocs_, 2, cart_dims_);
 
@@ -50,17 +50,15 @@ LBM::LBM(std::size_t nx, std::size_t ny,
     throw std::runtime_error(
       "nx must be divisible by pcols and ny by prows (from MPI_Dims_create)");
 
-  // 2. Create Cartesian communicator; reorder=0 keeps rank numbers stable,
-  //    which simplifies the tile-reordering in gather_fields.
+  //  Create Cartesian communicator; reorder=0 keeps rank numbers stable, which simplifies the tile-reordering in gather_fields.
   int periods[2] = {0, 0};
   MPI_Cart_create(comm, 2, cart_dims_, periods, /*reorder=*/0, &comm_);
   MPI_Comm_rank(comm_, &rank_);
 
-  // 3. Get this rank's position in the 2D grid: [row_coord, col_coord]
-  //    row_coord maps to y (vertical), col_coord maps to x (horizontal).
+  // Get this rank's position in the 2D grid: [row_coord, col_coord] row_coord maps to y (vertical), col_coord maps to x (horizontal).
   MPI_Cart_coords(comm_, rank_, 2, cart_coords_);
 
-  // 4. Compute local tile size and global offsets.
+  // Compute local tile size and global offsets.
   local_ny_ = ny / std::size_t(cart_dims_[0]);
   local_nx_ = nx / std::size_t(cart_dims_[1]);
   y_start_  = std::size_t(cart_coords_[0]) * local_ny_;
@@ -68,7 +66,7 @@ LBM::LBM(std::size_t nx, std::size_t ny,
   // Each tile has one ghost layer on every side.
   N_local_  = (local_nx_ + 2) * (local_ny_ + 2);
 
-  // 5. Find 4 axis-aligned neighbours; MPI_PROC_NULL for domain boundaries.
+  // Find 4 axis-aligned neighbours; MPI_PROC_NULL for domain boundaries.
   MPI_Cart_shift(comm_, 0, 1, &rank_below_, &rank_above_);  // y-axis: south/north
   MPI_Cart_shift(comm_, 1, 1, &rank_west_,  &rank_east_);   // x-axis: west/east
 
@@ -94,10 +92,6 @@ LBM::LBM(std::size_t nx, std::size_t ny,
   // and only the northernmost row owns global y=ny-1 (top wall).
   // The wall cells sit at local_y=1 and local_y=local_ny_ respectively
   // because local_y=0 and local_y=local_ny_+1 are ghost layers.
-  // Ghost columns (local_x=0 and local_x=local_nx_+1) must also be marked when
-  // they correspond to wall cells, because gather_streamed reads solid_[sk] for
-  // ghost positions and diagonal directions (NE/NW/SE/SW) can land in a ghost
-  // column at a wall row when a rank sits on both an x and a y domain boundary.
   for (std::size_t local_x = 0; local_x <= local_nx_ + 1; ++local_x) {
     if (y_start_ == 0)
       solid_[lidx(local_x, 1)] = 1;
@@ -238,7 +232,7 @@ LBM::exchange_halos()
   // Packing ly=0..local_ny_+1 means the ghost rows filled in step 1 are also
   // forwarded to diagonal neighbours, populating corner ghost cells.
   for (int i = 0; i < Q; ++i) {
-    for (std::size_t ly = 0; ly <= local_ny_ + 1; ++ly) {
+    for (std::size_t ly = 0; ly <= local_ny_ + 1; ++ly) { //this inner loop is needed because columns are not contiguous in memory
       send_west[std::size_t(i) * col_len + ly] =
           f_[std::size_t(i) * N_local_ + lidx(1,         ly)];
       send_east[std::size_t(i) * col_len + ly] =
@@ -507,12 +501,11 @@ LBM::gather_solid(std::vector<std::uint8_t>& solid_out) const
 }
 
 // ---------------------------------------------------------------------------
-// Debug print helpers (rank-aware, global indexing)
+// Debug print helpers (rank-aware)
 // ---------------------------------------------------------------------------
 
-// Pull-streaming for one cell; used only by print_post_stream_pre_collision.
-// Identical logic to collide_stream's inner loop but isolated for read-only
-// inspection before the actual step. Ghost layers must be fresh (after exchange_halos).
+// Pull-streaming for one cell, used in collide stream but isolated for debug examinations of post-stream 
+// pre-collision populations using print_post_stream_pre_collision. Ghost rows must be fresh (after exchange_halos).
 void
 LBM::gather_streamed(std::size_t local_x, std::size_t local_y, double f_local[Q]) const
 {

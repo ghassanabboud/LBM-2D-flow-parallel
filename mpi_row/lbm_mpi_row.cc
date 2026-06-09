@@ -152,7 +152,7 @@ LBM::step()
 void
 LBM::exchange_halos()
 {
-  const std::size_t row_len = nx_;  // doubles per row per direction plane
+  const std::size_t row_len = nx_;  
   const std::size_t buf_len = Q * row_len;
 
   std::vector<double> send_down(buf_len), recv_from_below(buf_len, 0.0);
@@ -400,12 +400,11 @@ LBM::gather_solid(std::vector<std::uint8_t>& solid_out) const
 }
 
 // ---------------------------------------------------------------------------
-// Debug print helpers (rank-aware, global y-indexing)
+// Debug print helpers
 // ---------------------------------------------------------------------------
 
-// Pull-streaming for one cell, used only by print_post_stream_pre_collision.
-// Identical logic to collide_stream's inner loop but isolated for read-only
-// inspection before the actual step. Ghost rows must be fresh (after exchange_halos).
+// Pull-streaming for one cell, used in collide stream but isolated for debug examinations of post-stream 
+// pre-collision populations using print_post_stream_pre_collision. Ghost rows must be fresh (after exchange_halos).
 void
 LBM::gather_streamed(std::size_t x, std::size_t local_y, double f_local[Q]) const
 {

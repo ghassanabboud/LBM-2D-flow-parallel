@@ -125,8 +125,6 @@ LBM::collide_stream()
       gather_streamed(x, y, f_local);
 
       // Collision over the new populations we just pulled
-
-
       double rho = 0.0, mx = 0.0, my = 0.0;
       for (int i = 0; i < Q; ++i) {
         rho += f_local[i];           //zeroth moment of distribution, aka density
@@ -156,8 +154,7 @@ void
 LBM::apply_inlet()
 {
   // Reset the inlet column to the equilibrium distribution corresponding
-  // to a prescribed uniform velocity (u_in, 0) and unit density. Simple,
-  // stable, and accurate enough for moderate Reynolds numbers.
+  // to a prescribed uniform velocity (u_in, 0) and unit density.
   const std::size_t x = 0;
   for (std::size_t y = 0; y < ny_; ++y) {
     if (solid_[idx(x, y)]) continue;
