@@ -18,11 +18,11 @@ CXXFLAGS += -O3 -g -Wall -Wextra -Werror -pedantic -std=c++11 $(HDF5_INC)
 LDFLAGS  += $(CXXFLAGS) $(HDF5_LIB) -lhdf5 -lm
 
 # Lists the three object files that will be compiled and linked together into the final binary.
-OBJS = main_mpi.o lbm_mpi.o output_mpi.o
+OBJS = main_mpi_row.o lbm_mpi_row.o output_mpi_row.o
 
-all: lbm_mpi
+all: lbm_mpi_row
 
-lbm_mpi: $(OBJS)
+lbm_mpi_row: $(OBJS)
 # $@ is a Make automatic variable meaning "the target name" — here, lbm
 	$(LD) -o $@ $(OBJS) $(LDFLAGS)
 
@@ -30,7 +30,7 @@ lbm_mpi: $(OBJS)
 	$(CXX) $(CXXFLAGS) -c -o $@ $<
 
 clean:
-	rm -f lbm_mpi *.o *~
+	rm -f lbm_mpi_row *.o *~
 
 distclean: clean
 	rm -rf out/ probe.csv *.gif

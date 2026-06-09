@@ -1,5 +1,5 @@
-#include "output_mpi.hh"
-#include "lbm_mpi.hh"
+#include "output_mpi_row.hh"
+#include "lbm_mpi_row.hh"
 
 #include <hdf5.h>
 #include <sys/stat.h>

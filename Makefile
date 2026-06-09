@@ -2,11 +2,11 @@
 #   module load gcc hdf5
 # HDF5_ROOT must point at an HDF5 install that provides include/ and lib/.
 
-VARIANTS = serial mpi serial_fused_AoS serial_fused_SoA mpi_cart
+VARIANTS = serial serial_fused_AoS serial_fused_SoA mpi_row mpi_cart cuda_SoA cuda_AoS
 
 all: $(VARIANTS)
 
-serial mpi serial_fused_AoS serial_fused_SoA mpi_cart:
+serial serial_fused_AoS serial_fused_SoA mpi_row mpi_cart cuda_SoA cuda_AoS:
 	$(MAKE) -C $@
 
 clean:

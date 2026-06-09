@@ -1,4 +1,4 @@
-#include "lbm_mpi.hh"
+#include "lbm_mpi_row.hh"
 
 #include <algorithm>
 #include <cassert>

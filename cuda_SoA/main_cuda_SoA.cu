@@ -83,7 +83,7 @@ main(int argc, char ** argv)
   const int block_x = get<int>(kv, "block_x", 256);
   const int block_y = get<int>(kv, "block_y", 1);
 
-  const int default_grid_x = (int(nx) + block_x - 1) / block_x;
+  const int default_grid_x = (int(nx) + block_x - 1) / block_x; // ceiling division
   const int default_grid_y = (int(ny) + block_y - 1) / block_y;
   const int grid_x  = get<int>(kv, "grid_x",  default_grid_x);
   const int grid_y  = get<int>(kv, "grid_y",  default_grid_y);
